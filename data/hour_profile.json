@@ -1,0 +1,7 @@
+{
+ "note": "Hour-of-day histogram of the Shaoxing slurry/soil truck status stream, used by the generator to draw L3 time-window centers. Frozen here so that CDW-LIB regenerates deterministically from this package alone, without the multi-gigabyte raw snapshots and without any personal fields.",
+ "source": "Shaoxing provincial open-data endpoint (public, unauthenticated); snapshot 2026-09-02",
+ "window": "2026-08-30 to 2026-09-01",
+ "records": 1000000,
+ "hour_counts": [[0, 30357], [1, 29791], [2, 28820], [3, 28575], [4, 24707], [5, 16338], [6, 34801], [7, 48292], [8, 51271], [9, 53365], [10, 54863], [11, 53485], [12, 54967], [13, 55290], [14, 58893], [15, 57804], [16, 56590], [17, 51093], [18, 43627], [19, 36345], [20, 34280], [21, 33743], [22, 31496], [23, 31207]]
+}

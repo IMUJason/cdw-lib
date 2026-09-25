@@ -38,12 +38,25 @@ TRIP_T = 10.0
 
 
 def hour_profile():
-    hours = Counter()
-    for p in sorted([]):
-        df = pd.read_csv(p, usecols=["gxsj"])
-        for h in pd.to_datetime(df["gxsj"]).dt.hour:
-            hours[int(h)] += 1
-    return sorted(hours.items())
+    """Hour-of-day histogram driving L3 time-window centers.
+
+    Reads the frozen histogram shipped in data/hour_profile.json, so the
+    family regenerates from this package alone. If the raw GPS snapshots are
+    present (they are large and are not distributed here), they are used
+    instead to rebuild the histogram from source.
+    """
+    raw = sorted(GPS_RAW.glob("part*.csv"))
+    if raw:
+        hours = Counter()
+        for p in raw:
+            df = pd.read_csv(p, usecols=["gxsj"])
+            for h in pd.to_datetime(df["gxsj"], errors="coerce").dt.hour.dropna():
+                hours[int(h)] += 1
+        if hours:
+            return sorted(hours.items())
+    frozen = FROZEN / "hour_profile.json"
+    with open(frozen) as fh:
+        return [tuple(x) for x in json.load(fh)["hour_counts"]]
 
 
 def build_pools():
