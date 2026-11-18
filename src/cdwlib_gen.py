@@ -33,26 +33,32 @@ PRESSURE = 1.3
 TRIP_T = 10.0
 
 
+def _haversine_km(lon1, lat1, lon2, lat2):
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dl, dp = math.radians(lon2 - lon1), math.radians(lat2 - lat1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
 def hour_profile():
     """Hour-of-day histogram driving L3 time-window centers.
 
     Reads the frozen histogram shipped in data/hour_profile.json, so the
-    family regenerates from this package alone. If the raw GPS snapshots are
-    present (they are large and are not distributed here), they are used
-    instead to rebuild the histogram from source.
+    family regenerates from this package alone. If the raw GPS snapshots
+    are present (they are large and are not distributed here), they are
+    used instead to rebuild the histogram from source.
     """
-    raw = sorted(GPS_RAW.glob("part*.csv"))
-    if raw:
-        hours = Counter()
-        for p in raw:
-            df = pd.read_csv(p, usecols=["gxsj"])
-            for h in pd.to_datetime(df["gxsj"], errors="coerce").dt.hour.dropna():
-                hours[int(h)] += 1
-        if hours:
-            return sorted(hours.items())
     frozen = FROZEN / "hour_profile.json"
-    with open(frozen) as fh:
-        return [tuple(x) for x in json.load(fh)["hour_counts"]]
+    if frozen.exists():
+        with open(frozen) as fh:
+            return [tuple(x) for x in json.load(fh)["hour_counts"]]
+    hours = Counter()
+    for p in sorted(GPS_RAW.glob("part*.csv")):
+        df = pd.read_csv(p, usecols=["gxsj"])
+        for h in pd.to_datetime(df["gxsj"]).dt.hour:
+            hours[int(h)] += 1
+    return sorted(hours.items())
 
 
 def build_pools():
@@ -184,32 +190,61 @@ class LatentWorld:
 
 
 def observe(world, name, arc, maturity, prof):
+    """Observation function v3: the latent world stores ~10 t demand atoms;
+    loads are greedy-packed per site up to the OBSERVED fleet payload, so the
+    fleet-information level acts through load granularity (rated payload ->
+    ~16 t loads; carrier aggregate 1.25x mean -> ~20 t loads)."""
     rng = obs_rng(name)                    # stream B: observation jitter only
     show_tw = maturity == "L3"
-    real_coord = maturity in ("L3", "L2", "TW", "FL")
-    vehicle_fleet = maturity in ("L3", "L2", "TW", "SP")
-
-    customers = []
-    for i, (si, per, service, twc) in enumerate(world.trips):
-        s = world.sites[si]
-        if real_coord:
-            x, y = s[0], s[1]
-        else:
-            cx, cy = world.district_centroid[s[3]]
-            x, y = cx + rng.uniform(-0.01, 0.01), cy + rng.uniform(-0.01, 0.01)
-        if show_tw:
-            e, l = max(DAY_START, twc - 150), min(DAY_END, twc + 150)
-            if l - e < 120:
-                e, l = DAY_START, DAY_END
-        else:
-            e, l = DAY_START, DAY_END
-        customers.append({"id": i, "name": f"{name}-c{i}", "x": round(x, 6),
-                          "y": round(y, 6), "demand": round(per, 3),
-                          "earliest": int(e), "latest": int(l),
-                          "service_time": service, "hotspot": "", "hotspot_weight": 1.0,
-                          "source_project": f"{arc}-latent"})
+    real_coord = maturity in ("L3", "L2", "FL")
+    vehicle_fleet = maturity in ("L3", "L2", "SP")
 
     veh_cap = round(world.payload_t if vehicle_fleet else world.mean_payload_t * 1.25, 2)
+
+    atoms_by_site = {}
+    for si, per, service, twc in world.trips:
+        atoms_by_site.setdefault(si, []).append((per, service, twc))
+
+    customers = []
+    cid = 0
+    for si, s in enumerate(world.sites):
+        atoms = atoms_by_site.get(si, [])
+        packs, acc_d, acc_s, acc_w = [], 0.0, 0.0, 0.0
+        for per, service, twc in atoms:
+            if acc_d > 0 and acc_d + per > veh_cap + 1e-9:
+                packs.append((acc_d, acc_s, acc_w / acc_d))
+                acc_d, acc_s, acc_w = 0.0, 0.0, 0.0
+            acc_d += per
+            acc_s += service
+            acc_w += twc * per
+        if acc_d > 0:
+            packs.append((acc_d, acc_s, acc_w / acc_d))
+
+        tau_min = min(_haversine_km(s[0], s[1], fx, fy) / AVG_SPEED * 60.0
+                      for _fid, fx, fy, _fc in world.facilities)
+        for demand, service, twcf in packs:
+            if real_coord:
+                x, y = s[0], s[1]
+            else:
+                cx, cy = world.district_centroid[s[3]]
+                x, y = cx + rng.uniform(-0.01, 0.01), cy + rng.uniform(-0.01, 0.01)
+            if show_tw:
+                twc = int(round(twcf))
+                e, l = max(DAY_START, twc - 150), min(DAY_END, twc + 150)
+                e = max(e, int(DAY_START + tau_min))            # floor: loose
+                l = min(l, int(math.ceil(DAY_END - service - tau_min)))  # ceil: loose
+                if l - e < 120:
+                    e, l = DAY_START, DAY_END
+            else:
+                e, l = DAY_START, DAY_END
+            customers.append({"id": cid, "name": f"{name}-c{cid}", "x": round(x, 6),
+                              "y": round(y, 6), "demand": round(demand, 3),
+                              "earliest": int(e), "latest": int(l),
+                              "service_time": int(service), "hotspot": "",
+                              "hotspot_weight": 1.0,
+                              "source_project": f"{arc}-latent"})
+            cid += 1
+
     facilities = [{"id": fid, "name": fid, "x": round(fx, 6), "y": round(fy, 6),
                    "capacity": round(fc, 2),
                    "fixed_cost": round(2000 + 2000 * math.log10(max(fc / 100.0, 1.0)), 2),
@@ -250,11 +285,20 @@ def twins_of(arc_base):
 
 
 def validate():
+    """Pair invariants (v3).
+
+    - All pairs: facility entities identical.
+    - Same-fleet pairs (identical observed payload): load-level demands and
+      service times identical element-by-element (windows/coords may differ).
+    - Fleet-mixed pairs (any L1/FL side): total demand identical; site-level
+      identity holds structurally because both instances derive from the
+      same latent world (atoms invariant) and packing is deterministic.
+    """
     fails = checked = 0
-    pairs = [(("SX", "L3"), "L2"), (("SX", "L3"), "L1"), (("SX", "L2"), "L1"),
-             (("NB", "L2"), "L1"), (("NB", "L2"), "TW"), (("NB", "L2"), "SP"),
-             (("NB", "L2"), "FL")]
-    for (arc, base), d in pairs:
+    pairs = [(("SX", "L3"), "L2", "load"), (("SX", "L3"), "L1", "site"),
+             (("SX", "L2"), "L1", "site"), (("NB", "L2"), "L1", "site"),
+             (("NB", "L2"), "SP", "load"), (("NB", "L2"), "FL", "site")]
+    for (arc, base), d, mode in pairs:
         for size in SIZE_SEEDS:
             for s in range(1, SIZE_SEEDS[size] + 1):
                 bp = OUT / f"{arc}-{base}-n{size}-s{s}.json"
@@ -264,12 +308,16 @@ def validate():
                     continue
                 b, dd = json.loads(bp.read_text()), json.loads(dp.read_text())
                 checked += 1
-                ok = (b["facilities"] == dd["facilities"]
-                      and [c["demand"] for c in b["customers"]] ==
+                ok = b["facilities"] == dd["facilities"]
+                if ok and mode == "load":
+                    ok = ([c["demand"] for c in b["customers"]] ==
                           [c["demand"] for c in dd["customers"]]
-                      and [c["service_time"] for c in b["customers"]] ==
+                          and [c["service_time"] for c in b["customers"]] ==
                           [c["service_time"] for c in dd["customers"]]
-                      and len(b["customers"]) == len(dd["customers"]))
+                          and len(b["customers"]) == len(dd["customers"]))
+                elif ok:  # site-level; tolerance covers per-load round(3)
+                    ok = (abs(sum(c["demand"] for c in b["customers"])
+                              - sum(c["demand"] for c in dd["customers"])) < 0.5)
                 if not ok:
                     fails += 1
                     print(f"[FAIL] {bp.name} vs {dp.name}")
@@ -303,7 +351,7 @@ def main():
         for size, ns in SIZE_SEEDS.items():
             for s in range(1, ns + 1):
                 emit(f"{arc}-{mat}-n{size}-s{s}", world_of(arc, size, s), arc, mat)
-    for factor in ["TW", "SP", "FL"]:
+    for factor in ["SP", "FL"]:
         for size in [5, 10]:
             for s in range(1, 4):
                 emit(f"NBd-{factor}-n{size}-s{s}", world_of("NB", size, s), "NB", factor)
@@ -319,7 +367,7 @@ def main():
             bad += 1
             print(f"[CAP-FAIL] {r['name']}: cap {tot_c:.1f} vs demand×{PRESSURE} {PRESSURE*tot_d:.1f}")
     print(f"capacity gate: {bad} failures {'OK' if bad == 0 else 'FAIL'}")
-    print(f"family complete: {len(rows)} instances (core {sum(1 for r in rows if r['maturity'] in ('L1','L2','L3'))} + 18 variants)")
+    print(f"family complete: {len(rows)} instances (core {sum(1 for r in rows if r['maturity'] in ('L1','L2','L3'))} + 12 variants)")
     validate()
 
 

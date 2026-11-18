@@ -93,7 +93,7 @@ class BenchmarkInstance:
     name: str
     description: str
     horizon_label: str
-    vehicle_capacity: int
+    vehicle_capacity: float
     vehicle_fixed_cost: float
     transport_cost_per_km: float
     max_route_minutes: int
@@ -138,7 +138,7 @@ class BenchmarkInstance:
             name=payload["name"],
             description=payload["description"],
             horizon_label=payload["horizon_label"],
-            vehicle_capacity=int(payload["vehicle_capacity"]),
+            vehicle_capacity=float(payload["vehicle_capacity"]),
             vehicle_fixed_cost=float(payload["vehicle_fixed_cost"]),
             transport_cost_per_km=float(payload["transport_cost_per_km"]),
             max_route_minutes=int(payload["max_route_minutes"]),

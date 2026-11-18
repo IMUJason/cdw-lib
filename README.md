@@ -1,21 +1,44 @@
 # CDW-LIB Minimal Reproducibility Package
 
-This package accompanies the manuscript *From Regulatory Data to Routing Benchmarks*.
-It contains only the cleaned input tables, benchmark instances, and core solver/generator code.
-It does not contain the manuscript, figures, figure-generation scripts, or private credentials.
+This package accompanies the manuscript *From Regulatory Data to Routing Benchmarks:
+An Information-Stratified Instance Library for Construction and Demolition Waste
+Transportation*. It contains the cleaned input tables, the benchmark instance
+family, and the generator and solver stack. It does not contain the manuscript,
+figures, figure-generation scripts, or private credentials.
 
 ## Contents
-- `data/`: seven cleaned tables. Identifiers are pseudonymized and personal/contact fields are removed.
-- `instances/`: 137 benchmark instances and the instance manifest.
-- `src/`: latent-world generator, ALNS, learning-augmented ALNS, exact MIP, and common data structures.
+- `data/`: seven cleaned tables (pseudonymized, personal/contact fields removed)
+  plus the frozen hour-of-day histogram that drives time-window calibration.
+- `instances/`: 131 benchmark instances (119 core + 12 single-factor variants)
+  and the instance manifest.
+- `src/`: the latent-world generator (`cdwlib_gen.py`), the multi-trip ALNS
+  (`mt_alns.py`), the chain-formulation exact model (`mt_prototype.py`), the
+  time-expanded lower-bound relaxation (`mt_lb.py`), the certified-bounds
+  battery (`mt_battery.py`), the value-of-information repair evaluation
+  (`mt_vss.py`), and the family-wide ALNS runner (`run_mt_alns.py`).
 
 ## Reproduction
-Python 3.10+ is required. `numpy`, `pandas`, and `docplex` are required; CPLEX 22.1 is required for the exact MIP.
+Python 3.10+ with `numpy` and `pandas`. `docplex` with a local CPLEX 22.1
+engine is required for the exact components (`mt_prototype.py`, `mt_lb.py`,
+`mt_battery.py`); the ALNS and the repair evaluation are standard-library only.
 
 ```bash
+# Regenerate the instance family deterministically and re-verify the
+# 80 entity-invariance pairs (prints: 80 pairs, 0 failures).
 python3 src/cdwlib_gen.py
+
+# Multi-trip ALNS on a micro instance.
+python3 src/mt_alns.py SX-L3-n3-s1
+
+# Certified interval [LB, UB] for a micro cell.
+python3 src/mt_battery.py --ub=300 --lb=300 SX-L3-n3-s1
+
+# Value-of-information evaluation with explicit repair execution.
+python3 src/mt_vss.py NB L2 L1 5 1
+
+# Full-family ALNS with resume (writes results/mt_alns_results.csv).
+python3 src/run_mt_alns.py
 ```
-The generator creates the benchmark instances deterministically from the cleaned tables.
 
 ## Licensing
 Code: MIT. Derived instances and cleaned tables: CC BY 4.0.
