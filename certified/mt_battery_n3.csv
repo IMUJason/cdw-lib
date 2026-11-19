@@ -1,5 +1,5 @@
 instance,loads,lb,ub,certified_gap_pct,ub_source,ub_mip,ub_mip_gap_pct,lb_status,ub_sec,lb_sec
-DQ-L1-n3-s1,36,12135.1,12135.1,-0.0,polished,12135.1,0.0,integer optimal solution,0.6,1.1
+DQ-L1-n3-s1,36,12135.1,12135.1,0.0,polished,12135.1,0.0,integer optimal solution,0.6,1.1
 DQ-L1-n3-s2,80,24672.5,24708.4,0.146,mip,24708.4,0.004,time limit exceeded,14.7,300.0
 NB-L1-n3-s1,27,26859.8,27359.8,1.862,mip,27359.8,1.827,integer optimal solution,300.2,0.4
 NB-L1-n3-s2,77,90151.1,91005.8,0.948,mip,91005.8,1.648,integer optimal solution,301.0,1.0

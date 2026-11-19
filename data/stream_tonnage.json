@@ -1,0 +1,30 @@
+{
+ "note": "Distribution of the tonnage field (dw) in the Shaoxing slurry/soil truck status records. Used in the manuscript to anchor the aggregate-payload factor to the 24% gap between the registry-level tonnage figure (median 20.0 t) and the verified vehicle-level rated payloads (mean 16.07 t). Frozen here so the statistic is reproducible from this package alone, like data/hour_profile.json.",
+ "source": "Shaoxing provincial open-data endpoint (public, unauthenticated); snapshot 2026-09-02",
+ "window": "2026-08-30 06:23 to 2026-09-01 04:45",
+ "records_total": 1000000,
+ "records_soil_2_40t": 991411,
+ "median_t": 20.0,
+ "mean_t": 20.799,
+ "p05_t": 17.12,
+ "p25_t": 20.0,
+ "p75_t": 23.0,
+ "p95_t": 24.0,
+ "histogram_tonnes": {
+  "6": 17474,
+  "13": 2067,
+  "17": 53926,
+  "18": 40782,
+  "19": 79720,
+  "20": 424434,
+  "21": 5968,
+  "22": 84518,
+  "23": 145065,
+  "24": 98209,
+  "25": 2555,
+  "26": 10359,
+  "27": 2136,
+  "30": 9421,
+  "31": 14777
+ }
+}

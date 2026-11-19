@@ -7,8 +7,10 @@ family, and the generator and solver stack. It does not contain the manuscript,
 figures, figure-generation scripts, or private credentials.
 
 ## Contents
-- `data/`: seven cleaned tables (pseudonymized, personal/contact fields removed)
-  plus the frozen hour-of-day histogram that drives time-window calibration.
+- `data/`: seven cleaned tables (pseudonymized, personal/contact fields removed),
+  the frozen hour-of-day histogram that drives time-window calibration, and the
+  frozen tonnage distribution of the Shaoxing status records (the registry figure
+  against which the aggregate-payload factor is anchored in the manuscript).
 - `instances/`: 131 benchmark instances (119 core + 12 single-factor variants)
   and the instance manifest.
 - `src/`: the latent-world generator (`cdwlib_gen.py`), the multi-trip ALNS
