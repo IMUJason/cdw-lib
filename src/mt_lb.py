@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from common import BenchmarkInstance  # noqa: E402
 
-DELTA = 5  # minutes per slot
+DELTA = 5  # minutes per slot (overridable via --delta)
 
 
 def solve_lb(inst: BenchmarkInstance, time_limit=600, ub_cutoff=None,
@@ -196,6 +196,15 @@ def solve_lb(inst: BenchmarkInstance, time_limit=600, ub_cutoff=None,
 
 
 if __name__ == "__main__":
-    for nm in (sys.argv[1:] or ["NB-L2-n3-s1"]):
+    names, delta = [], 5
+    argv = sys.argv[1:]
+    k = 0
+    while k < len(argv):
+        if argv[k].startswith("--delta="):
+            delta = int(argv[k].split("=")[1]); k += 1
+        else:
+            names.append(argv[k]); k += 1
+    DELTA = delta
+    for nm in (names or ["NB-L2-n3-s1"]):
         inst = BenchmarkInstance.load(ROOT / "instances" / f"{nm}.json")
         print(json.dumps(solve_lb(inst, time_limit=600)), flush=True)

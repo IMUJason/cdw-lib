@@ -38,7 +38,21 @@ python3 src/mt_vss.py NB L2 L1 5 1
 
 # Full-family ALNS with resume (writes results/mt_alns_results.csv).
 python3 src/run_mt_alns.py
+
+# Regenerate the family at another aggregate-payload factor (isolated
+# workdir; the released instances are never touched).
+python3 src/cdwlib_gen.py --qfactor 1.10 --out /tmp/family_qf110
+
+# Reproduce the Section-7 Q-prime sweep (full 80-pair grid per factor).
+python3 src/qfactor_sweep.py 1.10
+
+# Time-expanded lower bound at a finer slot width.
+/opt/conda/envs/env310/bin/python -I src/mt_lb.py --delta=1 SX-L3-n3-s1
 ```
+
+The `certified/` directory archives the certified results reported in the
+manuscript: the n=3 and n=5 optimality-interval batteries and the
+aggregate-payload sweep records at factors 1.10 and 1.40.
 
 ## Licensing
 Code: MIT. Derived instances and cleaned tables: CC BY 4.0.

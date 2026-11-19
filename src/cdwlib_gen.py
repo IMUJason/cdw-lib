@@ -44,10 +44,9 @@ def _haversine_km(lon1, lat1, lon2, lat2):
 def hour_profile():
     """Hour-of-day histogram driving L3 time-window centers.
 
-    Reads the frozen histogram shipped in data/hour_profile.json, so the
-    family regenerates from this package alone. If the raw GPS snapshots
-    are present (they are large and are not distributed here), they are
-    used instead to rebuild the histogram from source.
+    Reads the frozen histogram shipped in frozen_v0.2/hour_profile.json when
+    the raw GPS snapshots are absent, so the family regenerates from the
+    package alone; otherwise rebuilds the histogram from source.
     """
     frozen = FROZEN / "hour_profile.json"
     if frozen.exists():
@@ -189,17 +188,19 @@ class LatentWorld:
                                   for d, xs in byd.items()}
 
 
-def observe(world, name, arc, maturity, prof):
+def observe(world, name, arc, maturity, prof, q_factor=1.25):
     """Observation function v3: the latent world stores ~10 t demand atoms;
     loads are greedy-packed per site up to the OBSERVED fleet payload, so the
     fleet-information level acts through load granularity (rated payload ->
-    ~16 t loads; carrier aggregate 1.25x mean -> ~20 t loads)."""
+    ~16 t loads; carrier aggregate q_factor x mean -> ~20 t loads; the factor
+    is calibrated to the carrier-level real-to-rated tonnage ratio in the
+    registry records, see the manuscript)."""
     rng = obs_rng(name)                    # stream B: observation jitter only
     show_tw = maturity == "L3"
     real_coord = maturity in ("L3", "L2", "FL")
     vehicle_fleet = maturity in ("L3", "L2", "SP")
 
-    veh_cap = round(world.payload_t if vehicle_fleet else world.mean_payload_t * 1.25, 2)
+    veh_cap = round(world.payload_t if vehicle_fleet else world.mean_payload_t * q_factor, 2)
 
     atoms_by_site = {}
     for si, per, service, twc in world.trips:
@@ -325,10 +326,11 @@ def validate():
     return fails == 0
 
 
-def main():
+def main(q_factor=1.25, out_dir=None):
+    out = Path(out_dir) if out_dir else OUT
     prof = build_pools()
-    OUT.mkdir(parents=True, exist_ok=True)
-    for old in OUT.glob("*.json"):
+    out.mkdir(parents=True, exist_ok=True)
+    for old in out.glob("*.json"):
         old.unlink()
 
     worlds = {}
@@ -342,8 +344,8 @@ def main():
     rows = []
 
     def emit(name, w, arc, mat):
-        inst = observe(w, name, arc, mat, prof)
-        (OUT / f"{name}.json").write_text(json.dumps(inst, ensure_ascii=False), encoding="utf-8")
+        inst = observe(w, name, arc, mat, prof, q_factor)
+        (out / f"{name}.json").write_text(json.dumps(inst, ensure_ascii=False), encoding="utf-8")
         rows.append({"name": name, "archetype": arc, "maturity": mat,
                      "n": len(w.sites), "m": len(w.facilities), "n_trips": len(w.trips)})
 
@@ -356,11 +358,11 @@ def main():
             for s in range(1, 4):
                 emit(f"NBd-{factor}-n{size}-s{s}", world_of("NB", size, s), "NB", factor)
 
-    pd.DataFrame(rows).to_csv(OUT / "library_manifest.csv", index=False)
+    pd.DataFrame(rows).to_csv(out / "library_manifest.csv", index=False)
     # Capacity sanity gate (guards against unit bugs)
     bad = 0
     for r in rows:
-        d = json.loads((OUT / f"{r['name']}.json").read_text())
+        d = json.loads((out / f"{r['name']}.json").read_text())
         tot_d = sum(c["demand"] for c in d["customers"])
         tot_c = sum(f["capacity"] for f in d["facilities"])
         if abs(tot_c - PRESSURE * tot_d) > 0.02 * tot_d or min(f["capacity"] for f in d["facilities"]) <= 0:
@@ -372,7 +374,16 @@ def main():
 
 
 if __name__ == "__main__":
-    if "--validate" in sys.argv:
+    import argparse
+    ap = argparse.ArgumentParser(description="CDW-LIB latent-world generator")
+    ap.add_argument("--validate", action="store_true",
+                    help="re-verify the entity-invariance pairs on existing instances")
+    ap.add_argument("--qfactor", type=float, default=1.25,
+                    help="aggregate-payload factor for L1/FL packing (default 1.25, "
+                         "calibrated to the carrier-level real/rated tonnage ratio)")
+    ap.add_argument("--out", default=None, help="output directory (default: ../instances)")
+    args = ap.parse_args()
+    if args.validate:
         validate()
     else:
-        main()
+        main(q_factor=args.qfactor, out_dir=args.out)

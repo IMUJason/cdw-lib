@@ -51,6 +51,8 @@ from common import BenchmarkInstance  # noqa: E402
 ITERS_BY_N = {3: 200, 5: 200, 10: 150, 20: 60, 30: 30}
 SIZE_SEEDS = {3: 2, 5: 3, 10: 5, 20: 5, 30: 2}
 M_FAC = {3: 2, 5: 3, 10: 4, 20: 6, 30: 8}
+Q_AGG_FACTOR = 1.25   # aggregate-payload factor; overridable via --qfactor
+
 PAIRS = [("SX", "L3", "L2"), ("SX", "L3", "L1"), ("SX", "L2", "L1"),
          ("NB", "L2", "L1"), ("NB", "L2", "SP"), ("NB", "L2", "FL")]
 
@@ -68,7 +70,7 @@ class World:
         self.sites = self.w.sites
         self.fac = self.w.facilities
         self.Q_true = round(self.w.payload_t, 2)
-        self.Q_agg = round(self.w.mean_payload_t * 1.25, 2)
+        self.Q_agg = round(self.w.mean_payload_t * Q_AGG_FACTOR, 2)
 
     def packs(self, q_view):
         """Greedy packs per site at payload q_view; returns list of
@@ -299,7 +301,11 @@ def exec_chain_anchor(inst, chain, site_of, site_anchor, q_true, windows):
 
 
 def main():
-    argv = [a for a in sys.argv[1:]]
+    global Q_AGG_FACTOR
+    argv = [a for a in sys.argv[1:] if not a.startswith("--qfactor=")]
+    for a in sys.argv[1:]:
+        if a.startswith("--qfactor="):
+            Q_AGG_FACTOR = float(a.split("=", 1)[1])
     gen = _load("gen", GEN / "cdwlib_gen.py")
     prof = gen.build_pools()
     jobs = []
